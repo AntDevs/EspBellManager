@@ -46,6 +46,7 @@ export const initialConfig: EspBellConfig = {
   nonce_ttl_sec: 30,
   cert_path: '/resources/cert.crt',
   key_path: '/resources/cert.key',
+  target_esp_url: 'https://bell555.local',
 };
 
 export const initialSystemStatus = {

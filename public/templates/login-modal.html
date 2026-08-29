@@ -1,0 +1,73 @@
+<!-- /public/templates/login-modal.html: Модальное окно авторизации администратора Nonce SHA-256 -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in" id="login-modal-backdrop">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 relative">
+    <button data-action="closeModal" class="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors">
+      ✕
+    </button>
+
+    <div class="space-y-1">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
+        <span>🔒 Протокол Nonce + SHA-256</span>
+      </div>
+      <h3 class="text-xl font-bold text-white tracking-tight">
+        Вход администратора EspBellAdmin
+      </h3>
+      <p class="text-slate-400 text-xs">
+        Защита от перехвата: пароль никогда не передается в открытом виде.
+      </p>
+    </div>
+
+    <!-- Cryptographic Challenge Card -->
+    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 text-xs font-mono">
+      <div class="flex items-center justify-between text-slate-400">
+        <span>Одноразовый Nonce (8 байт):</span>
+        <button data-action="refreshNonce" class="text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+          <span>🔄 Обновить</span>
+        </button>
+      </div>
+
+      <div class="p-2.5 bg-slate-900 rounded-xl border border-slate-800/80 text-cyan-300 font-bold tracking-wider select-all" id="login-nonce-display" data-bind="auth.nonce">
+        a1b2c3d4e5f67890
+      </div>
+    </div>
+
+    <!-- Error container -->
+    <div class="hidden p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-rose-300 text-xs" id="login-error-box">
+      <span id="login-error-text">Неверный пароль</span>
+    </div>
+
+    <!-- Form -->
+    <form id="login-form" class="space-y-4">
+      <div class="space-y-1.5">
+        <label class="block text-xs font-semibold text-slate-300">
+          Пароль администратора (по умолч.: <span class="text-cyan-400 font-mono" data-bind="auth.adminPassword">esp32admin</span>)
+        </label>
+        <input
+          type="password"
+          id="login-password-input"
+          placeholder="Введите пароль..."
+          class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono"
+          autofocus
+        />
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          data-action="closeModal"
+          class="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+        >
+          Отмена
+        </button>
+
+        <button
+          type="submit"
+          data-action="submitLogin"
+          class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-cyan-500/20"
+        >
+          Авторизоваться
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

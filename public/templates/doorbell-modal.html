@@ -1,0 +1,88 @@
+<!-- /public/templates/doorbell-modal.html: Модальное окно симулятора физического звонка -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in" id="modal-backdrop">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
+    <!-- Close Button -->
+    <button data-action="closeModal" class="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors">
+      ✕
+    </button>
+
+    <!-- Modal Title -->
+    <div class="space-y-1">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
+        <span>✨ Эмулятор физического звонка</span>
+      </div>
+      <h3 class="text-2xl font-bold text-white tracking-tight">
+        Интерактивный уличный дверной звонок
+      </h3>
+      <p class="text-slate-400 text-xs sm:text-sm">
+        Нажмите на кнопку дверного звонка, чтобы увидеть работу цепи самоблокировки питания (GPIO4), светодиода NeoPixel и звукового тракта PCM5102A I2S DAC.
+      </p>
+    </div>
+
+    <!-- Physical Bell Hardware Unit Simulation -->
+    <div class="bg-gradient-to-b from-slate-950 to-slate-900 rounded-2xl border-2 border-slate-700/80 p-8 flex flex-col items-center justify-center space-y-6 shadow-inner relative">
+      <!-- Status LED on top of Bell -->
+      <div class="flex items-center gap-2">
+        <span id="modal-led-indicator" class="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-md"></span>
+        <span id="modal-led-text" class="text-xs font-mono uppercase tracking-wider text-slate-400">
+          NeoPixel: STANDBY
+        </span>
+      </div>
+
+      <!-- Round Illuminated Doorbell Button -->
+      <div class="relative group">
+        <button data-action="triggerRing" id="modal-btn-ring" class="w-36 h-36 rounded-full flex flex-col items-center justify-center gap-1 font-bold text-lg transition-all duration-200 border-4 bg-gradient-to-br from-slate-800 to-slate-900 hover:from-slate-750 hover:to-slate-850 border-slate-600 hover:border-cyan-400 text-slate-200 shadow-xl hover:shadow-cyan-500/20 active:scale-95">
+          <span class="text-3xl">🔔</span>
+          <span class="text-xs font-semibold tracking-wider uppercase" id="modal-ring-btn-text">Нажать</span>
+        </button>
+      </div>
+
+      <!-- Speaker Sound Grill Visualizer -->
+      <div class="w-full max-w-xs space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-400 font-mono">
+          <span class="flex items-center gap-1.5">
+            <span>🔊 Динамик (I2S ЦАП)</span>
+          </span>
+          <span class="text-cyan-400 font-bold" data-bind="config.gainStr">100%</span>
+        </div>
+
+        <div class="h-4 flex items-center justify-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+          <span class="w-1 h-3 rounded-full bg-cyan-400"></span>
+          <span class="w-1 h-2 rounded-full bg-cyan-500"></span>
+          <span class="w-1 h-3.5 rounded-full bg-cyan-400"></span>
+          <span class="w-1 h-1.5 rounded-full bg-cyan-600"></span>
+          <span class="w-1 h-2.5 rounded-full bg-cyan-400"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Runtime Sequence Diagram -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+      <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+        <span class="text-slate-500 block font-mono">1. Кнопка звонка</span>
+        <span class="font-semibold text-slate-200">Подача питания / Пробуждение</span>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+        <span class="text-slate-500 block font-mono">2. Реле GPIO4</span>
+        <span class="font-semibold text-emerald-400" data-bind="power.badge">LATCH ACTIVE</span>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+        <span class="text-slate-500 block font-mono">3. I2S Поток</span>
+        <span class="font-semibold text-cyan-400" data-bind="track.filename">bell.wav (16-bit)</span>
+      </div>
+    </div>
+
+    <!-- Footer Action -->
+    <div class="flex items-center justify-between pt-2">
+      <span class="text-xs text-slate-500">
+        Мелодия: <span class="text-slate-300 font-mono" data-bind="track.title">Вестминстерский бой</span>
+      </span>
+
+      <button data-action="closeModal" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition-colors">
+        Закрыть окно
+      </button>
+    </div>
+  </div>
+</div>

@@ -109,7 +109,34 @@ export const API_ENDPOINTS: ApiEndpointSpec[] = [
 ];
 
 class EspBellApiClient {
-  private baseUrl = '';
+  private baseUrl = 'https://bell555.local';
+
+  constructor() {
+    try {
+      const saved = localStorage.getItem('espbell_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.target_esp_url) {
+          this.setBaseUrl(parsed.target_esp_url);
+        }
+      }
+    } catch {}
+  }
+
+  public setBaseUrl(url: string) {
+    let cleanUrl = (url || '').trim();
+    // Remove trailing slashes
+    cleanUrl = cleanUrl.replace(/\/+$/, '');
+    // If user entered just bell555.local or 192.168.1.145, add protocol
+    if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+    this.baseUrl = cleanUrl;
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl || 'https://bell555.local';
+  }
 
   private async request<T>(
     method: 'GET' | 'POST',
@@ -118,7 +145,8 @@ class EspBellApiClient {
     headers: Record<string, string> = {}
   ): Promise<ApiResponse<T>> {
     const startTime = performance.now();
-    const url = `${this.baseUrl}${path}`;
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const url = `${this.baseUrl}${cleanPath}`;
     
     try {
       const fetchOptions: RequestInit = {

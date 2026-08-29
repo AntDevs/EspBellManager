@@ -38,7 +38,7 @@ export function HtmlTemplatesView({
   onStopSound,
   logs,
 }: HtmlTemplatesViewProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<'main' | 'upload' | 'config' | 'logs' | 'api'>('main');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('main');
   const [viewMode, setViewMode] = useState<'live' | 'split' | 'source'>('split');
   const [rawHtml, setRawHtml] = useState<string>('');
   const [editableHtml, setEditableHtml] = useState<string>('');
@@ -54,9 +54,14 @@ export function HtmlTemplatesView({
     { id: 'main', name: 'main.html', label: 'Главный экран звонка', path: '/templates/main.html', size: '4.8 KB' },
     { id: 'upload', name: 'upload.html', label: 'Загрузка и конвертер WAV', path: '/templates/upload.html', size: '3.9 KB' },
     { id: 'config', name: 'config.html', label: 'Редактор /config.json', path: '/templates/config.html', size: '4.1 KB' },
+    { id: 'hardware', name: 'hardware.html', label: 'Схема I2S ЦАП PCM5102A', path: '/templates/hardware.html', size: '3.4 KB' },
     { id: 'logs', name: 'logs.html', label: 'Журнал boot.log', path: '/templates/logs.html', size: '2.2 KB' },
     { id: 'api', name: 'api.html', label: 'REST API Инспектор', path: '/templates/api.html', size: '2.5 KB' },
-  ] as const;
+    { id: 'header', name: 'header.html', label: 'Шапка и навигация', path: '/templates/header.html', size: '2.1 KB' },
+    { id: 'footer', name: 'footer.html', label: 'Футер приложения', path: '/templates/footer.html', size: '0.6 KB' },
+    { id: 'doorbell-modal', name: 'doorbell-modal.html', label: 'Эмулятор физического звонка', path: '/templates/doorbell-modal.html', size: '2.9 KB' },
+    { id: 'login-modal', name: 'login-modal.html', label: 'Авторизация Nonce+SHA256', path: '/templates/login-modal.html', size: '2.4 KB' },
+  ];
 
   // Load selected HTML template
   useEffect(() => {

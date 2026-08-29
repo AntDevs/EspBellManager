@@ -1,6 +1,13 @@
 # 3. Запустите локальный сервер разработки (Express + Vite + REST API):
 npm run dev
+192.168.0.190
+0.0.0.0:443
 
+https://192.168.0.190/api/info
+https://0.0.0.0:443/api/info
+http://0.0.0.0/api/info
+https://bell555.local/api/info
+https://192.168.0.190/api/info
 
 Запуск сервера разработки	npm run dev
 Проверка типов TypeScript	npm run lint

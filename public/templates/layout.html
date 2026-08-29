@@ -1,0 +1,74 @@
+<!-- /public/templates/layout.html: Чистый HTML каркас всего приложения EspBellAdmin -->
+<div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-300">
+  <!-- Header / Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 font-bold text-white text-xl">
+          🔔
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-white tracking-tight">EspBellAdmin</h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold font-mono uppercase rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              MicroPython S3
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 font-mono">ESP32-S3 I2S Doorbell Audio System</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800" id="nav-tabs-container">
+        <button data-action="setTab" data-tab="main" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-main">
+          <span>Главная</span>
+        </button>
+        <button data-action="setTab" data-tab="upload" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-upload">
+          <span>Загрузка WAV</span>
+        </button>
+        <button data-action="setTab" data-tab="config" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-config">
+          <span>Параметры & Сеть</span>
+        </button>
+        <button data-action="setTab" data-tab="hardware" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-hardware">
+          <span>Схема I2S DAC</span>
+        </button>
+        <button data-action="setTab" data-tab="logs" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-logs">
+          <span>Журнал boot.log</span>
+        </button>
+        <button data-action="setTab" data-tab="api" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-api">
+          <span>REST API</span>
+        </button>
+        <button data-action="setTab" data-tab="templates" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900" id="tab-btn-templates">
+          <span>HTML Шаблоны</span>
+        </button>
+      </nav>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <!-- Doorbell Simulator Modal Button -->
+        <button data-action="openDoorbellModal" class="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs sm:text-sm font-medium border border-slate-700 transition-all hover:border-cyan-500/50 shadow-sm">
+          <span>🔔 Эмулятор</span>
+        </button>
+
+        <!-- Quick Bell Ring Action -->
+        <button data-action="triggerBell" id="header-btn-ring" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-500/25 active:scale-95">
+          <span id="header-ring-label">Позвонить</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Dynamic Views Container (Data-Bound dynamically) -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6" id="app-view-container">
+    <!-- View templates mount here cleanly -->
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-900 bg-slate-950 py-4 text-center text-xs text-slate-500 font-mono">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>EspBellAdmin • ESP32-S3 MicroPython I2S Doorbell System</span>
+      <span>PCM5102A DAC (GPIO15, 16, 17) • Relay Latch (GPIO4)</span>
+    </div>
+  </footer>
+</div>

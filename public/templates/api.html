@@ -13,9 +13,24 @@
         </p>
       </div>
 
-      <button id="btn-test-all-api" data-action="testAllEndpoints" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 active:scale-95 transition-all">
-        <span>⚡ Проверить все эндпоинты</span>
-      </button>
+      <div class="flex items-center gap-3">
+        <button id="btn-test-all-api" data-action="testAllEndpoints" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 active:scale-95 transition-all">
+          <span>⚡ Проверить все эндпоинты</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Target Host Indicator Bar -->
+    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-slate-400">Текущий базовый хост ESP32:</span>
+        <span id="api-inspector-base-url" class="font-bold text-cyan-300">https://bell555.local</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-slate-500">Изменить хост можно во вкладке</span>
+        <span class="px-2 py-0.5 rounded bg-slate-800 text-cyan-400 border border-slate-700 text-[11px]">Параметры & Сеть</span>
+      </div>
     </div>
 
     <!-- Endpoints List -->

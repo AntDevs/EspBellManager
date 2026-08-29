@@ -44,6 +44,9 @@ export interface EspBellConfig {
   nonce_ttl_sec: number;
   cert_path: string;
   key_path: string;
+
+  // Custom ESP32 Device URL / Host Link
+  target_esp_url: string;
 }
 
 export interface AudioTrackInfo {
