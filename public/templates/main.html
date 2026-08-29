@@ -1,0 +1,165 @@
+<!-- Template: main.html (EspBellAdmin Main Dashboard) -->
+<div class="space-y-6 animate-fadeIn">
+  <!-- Top Telemetry & Status Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Card 1: Active Melody -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Активная мелодия</span>
+        <span class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 text-xs font-mono">I2S DAC</span>
+      </div>
+      <div class="mt-3">
+        <h4 id="tpl-track-title" data-bind="track.title" class="text-lg font-bold text-white truncate">Вестминстерский перезвон</h4>
+        <p id="tpl-track-format" data-bind="track.format" class="text-xs text-slate-400 mt-0.5">PCM WAV 16-bit 44.1kHz</p>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-xs font-mono border-t border-slate-800/80 pt-3">
+        <span class="text-slate-500">Размер Flash:</span>
+        <span id="tpl-track-size" data-bind="track.sizeStr" class="text-cyan-400 font-bold">275.6 KB</span>
+      </div>
+    </div>
+
+    <!-- Card 2: Power Latch -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Питание и реле</span>
+        <span id="tpl-relay-badge" data-bind="power.badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">GPIO4 HIGH</span>
+      </div>
+      <div class="mt-3">
+        <div class="text-lg font-bold text-white flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>Самоблокировка</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-0.5">Удержание питания реле включено</p>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-xs font-mono border-t border-slate-800/80 pt-3">
+        <span class="text-slate-500">Автоотключение:</span>
+        <span id="tpl-smart-timeout" data-bind="power.timeoutRemaining" class="text-amber-400 font-bold">180 сек</span>
+      </div>
+    </div>
+
+    <!-- Card 3: ESP32 Memory -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Память Heap / PSRAM</span>
+        <span class="p-2 rounded-xl bg-blue-500/10 text-blue-400 text-xs font-mono">ESP32-S3</span>
+      </div>
+      <div class="mt-3">
+        <h4 id="tpl-heap-free" data-bind="system.heapFree" class="text-lg font-bold text-white font-mono">284 KB Free</h4>
+        <p class="text-xs text-slate-400 mt-0.5">PSRAM 8MB: 7.4 MB доступно</p>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-xs font-mono border-t border-slate-800/80 pt-3">
+        <span class="text-slate-500">Температура:</span>
+        <span id="tpl-core-temp" data-bind="system.temperature" class="text-slate-300 font-bold">41.2 °C</span>
+      </div>
+    </div>
+
+    <!-- Card 4: Hardware NeoPixel & Wi-Fi -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Индикация WS2812</span>
+        <div id="tpl-led-indicator" data-bind="system.ledStyle" class="w-4 h-4 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/50"></div>
+      </div>
+      <div class="mt-3">
+        <h4 id="tpl-wifi-ip" data-bind="system.wifiIp" class="text-lg font-bold text-white font-mono">192.168.1.145</h4>
+        <p id="tpl-wifi-ssid" data-bind="system.wifiSsid" class="text-xs text-slate-400 mt-0.5">Сеть: Home_WiFi_2.4G</p>
+      </div>
+      <div class="mt-4 flex items-center justify-between text-xs font-mono border-t border-slate-800/80 pt-3">
+        <span class="text-slate-500">Сигнал Wi-Fi:</span>
+        <span id="tpl-wifi-rssi" data-bind="system.wifiRssi" class="text-emerald-400 font-bold">-54 dBm</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Big Interactive Player & Audio Controller -->
+  <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-2">
+          <span>● Аппаратный I2S аудиопоток (PCM5102A)</span>
+        </div>
+        <h2 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Управление воспроизведением звонка</h2>
+        <p class="text-slate-400 text-sm mt-1">
+          Прямое воспроизведение через DMA каналы ESP32-S3 на внешний ЦАП PCM5102A с низким коэффициентом искажений.
+        </p>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-3">
+        <button id="btn-trigger-ring" data-action="triggerRing" class="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-sm shadow-xl shadow-amber-500/25 active:scale-95 transition-all">
+          <span>🔔 Позвонить в звонок</span>
+        </button>
+
+        <button id="btn-play-pause" data-action="togglePlay" class="flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-xl shadow-cyan-600/30 active:scale-95 transition-all">
+          <span id="tpl-play-label">▶ Тест звука</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Animated Waveform Simulation -->
+    <div class="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-3">
+      <div class="flex items-center justify-between text-xs text-slate-400 font-mono">
+        <span class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span>Форма звуковой волны (16-bit PCM Stereo)</span>
+        </span>
+        <span id="tpl-track-duration" data-bind="track.durationStr" class="text-cyan-400 font-bold">3.2 сек</span>
+      </div>
+
+      <div class="h-24 w-full bg-slate-900/80 rounded-xl border border-slate-800/80 p-2 flex items-center justify-center gap-1 overflow-hidden" id="tpl-waveform-container">
+        <!-- Bars are dynamically bound or styled -->
+        <div class="flex items-center justify-center gap-1 w-full h-full">
+          <div class="w-1.5 h-6 bg-cyan-500/40 rounded-full animate-pulse"></div>
+          <div class="w-1.5 h-12 bg-cyan-500/60 rounded-full"></div>
+          <div class="w-1.5 h-16 bg-cyan-500 rounded-full"></div>
+          <div class="w-1.5 h-20 bg-cyan-400 rounded-full shadow-lg shadow-cyan-400/50"></div>
+          <div class="w-1.5 h-14 bg-cyan-500 rounded-full"></div>
+          <div class="w-1.5 h-10 bg-cyan-500/70 rounded-full"></div>
+          <div class="w-1.5 h-18 bg-cyan-400 rounded-full"></div>
+          <div class="w-1.5 h-8 bg-cyan-500/40 rounded-full"></div>
+        </div>
+      </div>
+
+      <!-- Gain Slider Control -->
+      <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+        <div class="flex items-center gap-3 flex-1">
+          <span class="text-slate-400 font-semibold shrink-0">Громкость ЦАП (Gain):</span>
+          <input type="range" id="input-gain" data-action="changeGain" min="0.1" max="2.0" step="0.05" value="1.0" class="w-full max-w-xs accent-cyan-500 cursor-pointer">
+          <span id="tpl-gain-val" data-bind="config.gainStr" class="text-cyan-400 font-mono font-bold shrink-0">100% (1.0x)</span>
+        </div>
+        <div class="text-slate-500 font-mono text-[11px]">
+          Шина I2S: BCK=GPIO15 • WS=GPIO16 • DIN=GPIO17
+        </div>
+      </div>
+    </div>
+
+    <!-- Built-in Chime Presets -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="text-sm font-semibold text-slate-300">Библиотека встроенных мелодий</h4>
+        <span class="text-xs text-slate-500 font-mono">Синтезатор PCM гармоник</span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="tpl-presets-grid">
+        <button data-action="selectPreset" data-preset="westminster" class="p-3 bg-slate-950/80 hover:bg-slate-800 rounded-xl border border-slate-800 text-left transition-all group">
+          <div class="text-xs font-bold text-white group-hover:text-cyan-400">Вестминстер</div>
+          <div class="text-[10px] text-slate-400">Классический бой</div>
+        </button>
+
+        <button data-action="selectPreset" data-preset="dingdong" class="p-3 bg-slate-950/80 hover:bg-slate-800 rounded-xl border border-slate-800 text-left transition-all group">
+          <div class="text-xs font-bold text-white group-hover:text-cyan-400">Динг-Донг</div>
+          <div class="text-[10px] text-slate-400">Двухтональный звон</div>
+        </button>
+
+        <button data-action="selectPreset" data-preset="pentatonic" class="p-3 bg-slate-950/80 hover:bg-slate-800 rounded-xl border border-slate-800 text-left transition-all group">
+          <div class="text-xs font-bold text-white group-hover:text-cyan-400">Пентатоника</div>
+          <div class="text-[10px] text-slate-400">Мягкий перелив</div>
+        </button>
+
+        <button data-action="selectPreset" data-preset="marimba" class="p-3 bg-slate-950/80 hover:bg-slate-800 rounded-xl border border-slate-800 text-left transition-all group">
+          <div class="text-xs font-bold text-white group-hover:text-cyan-400">Маримба</div>
+          <div class="text-[10px] text-slate-400">Деревянный звон</div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

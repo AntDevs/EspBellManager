@@ -1,0 +1,92 @@
+<!-- Template: upload.html (Audio Processing & Upload to ESP32) -->
+<div class="space-y-6 animate-fadeIn">
+  <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6">
+    <!-- Header -->
+    <div class="space-y-2">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
+        <span>⚡ WebAudio конвертер в 16-bit PCM WAV</span>
+      </div>
+      <h2 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+        Загрузка и подготовка мелодии звонка
+      </h2>
+      <p class="text-slate-400 text-sm max-w-3xl">
+        Выберите любой MP3, WAV, AAC, M4A или FLAC файл с телефона. Браузер автоматически декодирует аудио, позволит выбрать нужный отрезок и сконвертирует его в 16-битный стерео PCM WAV с каноническим RIFF заголовком для прямого воспроизведения через I2S DMA контроллера ESP32-S3.
+      </p>
+    </div>
+
+    <!-- Dropzone Area -->
+    <div 
+      id="tpl-dropzone" 
+      data-action="openFileDialog"
+      class="border-2 border-dashed border-slate-700 hover:border-cyan-500/60 bg-slate-950/60 hover:bg-slate-950 rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all space-y-4 group"
+    >
+      <input type="file" id="tpl-file-input" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" class="hidden">
+      
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+        <span class="text-2xl">🎵</span>
+      </div>
+
+      <div class="space-y-1">
+        <h4 class="text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
+          Нажмите для выбора аудиофайла или перетащите сюда
+        </h4>
+        <p class="text-xs text-slate-400">
+          Поддерживаются MP3, WAV, OGG, AAC, M4A, FLAC (до 15 МБ)
+        </p>
+      </div>
+
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 group-hover:bg-cyan-600 text-slate-200 group-hover:text-white text-xs font-semibold transition-colors">
+        <span>Выбрать файл с устройства</span>
+      </div>
+    </div>
+
+    <!-- Audio Trimmer & Preview Container (shown when file is loaded) -->
+    <div id="tpl-trimmer-box" class="space-y-6 bg-slate-950 p-6 rounded-2xl border border-slate-800">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div>
+          <h3 id="tpl-loaded-filename" class="text-base font-bold text-white">bell_original.mp3</h3>
+          <p id="tpl-loaded-meta" class="text-xs text-slate-400">Исходная длительность: 14.5 сек • 44100 Hz</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-preview-trim" data-action="previewTrimmed" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors">
+            ▶ Прослушать фрагмент
+          </button>
+        </div>
+      </div>
+
+      <!-- Trimmer Controls -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
+        <div class="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Начало (Start):</span>
+            <span id="tpl-start-time-val" class="text-cyan-400 font-bold">0.0 с</span>
+          </div>
+          <input type="range" id="input-trim-start" data-action="changeTrimStart" min="0" max="15" step="0.1" value="0" class="w-full accent-cyan-500 cursor-pointer">
+        </div>
+
+        <div class="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Конец (End):</span>
+            <span id="tpl-end-time-val" class="text-cyan-400 font-bold">3.5 с</span>
+          </div>
+          <input type="range" id="input-trim-end" data-action="changeTrimEnd" min="0.5" max="15" step="0.1" value="3.5" class="w-full accent-cyan-500 cursor-pointer">
+        </div>
+
+        <div class="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Плавное нарастание/затухание:</span>
+            <span class="text-cyan-400 font-bold">100 мс</span>
+          </div>
+          <div class="text-[11px] text-slate-500">Автоматическое устранение щелчков в I2S ЦАП</div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-2 flex items-center justify-end gap-3">
+        <button id="btn-encode-upload" data-action="encodeAndUpload" class="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 active:scale-95 transition-all">
+          <span>⚡ Сконвертировать и загрузить на ESP32</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

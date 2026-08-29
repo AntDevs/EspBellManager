@@ -1,0 +1,10 @@
+# 3. Запустите локальный сервер разработки (Express + Vite + REST API):
+npm run dev
+
+
+Запуск сервера разработки	npm run dev
+Проверка типов TypeScript	npm run lint
+Сборка продакшн-бандла	npm run build
+Прошивка MicroPython в ESP32	esptool.py --chip esp32s3 --port /dev/ttyACM0 write_flash -z 0x0 firmware.bin
+Загрузка HTML-шаблона на ESP32	mpremote cp public/templates/main.html :templates/main.html
+Мониторинг Serial-порта ESP32

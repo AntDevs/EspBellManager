@@ -1,0 +1,26 @@
+<!-- Template: api.html (REST API Live Interactive Explorer) -->
+<div class="space-y-6 animate-fadeIn">
+  <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-2">
+          <span>⚡ REST API & Microdot Network Service</span>
+        </div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Инспектор REST API ESP32-S3</h2>
+        <p class="text-slate-400 text-xs sm:text-sm mt-1">
+          Прямое тестирование всех HTTP эндпоинтов Microdot сервера с замером времени отклика.
+        </p>
+      </div>
+
+      <button id="btn-test-all-api" data-action="testAllEndpoints" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 active:scale-95 transition-all">
+        <span>⚡ Проверить все эндпоинты</span>
+      </button>
+    </div>
+
+    <!-- Endpoints List -->
+    <div class="grid grid-cols-1 gap-4" id="tpl-api-endpoints-container">
+      <!-- Injected by Data Binding -->
+    </div>
+  </div>
+</div>

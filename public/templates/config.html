@@ -1,0 +1,114 @@
+<!-- Template: config.html (ESP32-S3 Flash /config.json Editor) -->
+<div class="space-y-6 animate-fadeIn">
+  <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-2">
+          <span>⚙️ Flash Memory /config.json</span>
+        </div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Конфигурация параметров устройства</h2>
+        <p class="text-slate-400 text-xs sm:text-sm mt-1">
+          Настройки оборудования, шины I2S, тайм-аута реле самоблокировки и безопасности.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-reset-cfg" data-action="resetConfig" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors">
+          Сброс в Defaults
+        </button>
+        <button id="btn-save-cfg" data-action="saveConfig" class="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all">
+          Сохранить во Flash
+        </button>
+      </div>
+    </div>
+
+    <!-- Form Sections -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+      <!-- Section 1: Power & Latch -->
+      <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+        <h3 class="font-bold text-white flex items-center gap-2">
+          <span class="text-amber-400">⚡</span>
+          <span>Управление питанием и таймер сна</span>
+        </h3>
+        
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Smart Timeout (секунды):</label>
+            <input type="number" id="cfg-timeout" data-bind="smart_timeout_sec" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none" value="180">
+            <span class="text-[11px] text-slate-500">Время до сброса GPIO4 в LOW и отключения питания</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Файл мелодии на SPI Flash:</label>
+            <input type="text" id="cfg-filename" data-bind="target_filename" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none" value="bell.wav">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Audio & I2S Hardware -->
+      <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+        <h3 class="font-bold text-white flex items-center gap-2">
+          <span class="text-cyan-400">🔊</span>
+          <span>Параметры I2S ЦАП PCM5102A</span>
+        </h3>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Масштабирование громкости (Gain):</label>
+            <input type="number" step="0.05" min="0.1" max="2.0" id="cfg-gain" data-bind="gain_scale" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none" value="1.0">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Частота дискретизации (Sample Rate):</label>
+            <select id="cfg-samplerate" data-bind="sample_rate" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none">
+              <option value="44100">44100 Hz (CD Quality)</option>
+              <option value="48000">48000 Hz (Studio)</option>
+              <option value="22050">22050 Hz (Low Memory)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Wi-Fi Station -->
+      <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+        <h3 class="font-bold text-white flex items-center gap-2">
+          <span class="text-blue-400">📡</span>
+          <span>Wi-Fi подключение</span>
+        </h3>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">SSID Сети:</label>
+            <input type="text" id="cfg-wifi-ssid" data-bind="wifi_ssid" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none" value="Home_WiFi_2.4G">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Пароль Wi-Fi:</label>
+            <input type="password" id="cfg-wifi-pass" data-bind="wifi_password" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none" value="••••••••">
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Security -->
+      <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+        <h3 class="font-bold text-white flex items-center gap-2">
+          <span class="text-emerald-400">🔒</span>
+          <span>Безопасность и пароль админа</span>
+        </h3>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Пароль веб-панели (Web Auth):</label>
+            <input type="password" id="cfg-admin-pass" data-bind="admin_password" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none" value="espbell2026">
+            <span class="text-[11px] text-slate-500">Хэшируется через SHA-256 + 8-байтный nonce на клиенте</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Имя хоста (mDNS):</label>
+            <input type="text" id="cfg-hostname" data-bind="hostname" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none" value="espbell.local">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

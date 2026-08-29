@@ -1,0 +1,6 @@
+{
+  "name": "EspBellAdmin - Smart Doorbell Audio Manager",
+  "description": "Система управления дверным звонком на базе ESP32-S3: беспроводная загрузка мелодий с телефона, WebAudio WAV-конвертер, настройка I2S DAC, Wi-Fi и реле питания.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
