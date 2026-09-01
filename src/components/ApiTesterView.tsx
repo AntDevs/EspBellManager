@@ -19,11 +19,18 @@ export const ApiTesterView: React.FC = () => {
       if (path === '/api/info') r = await apiClient.getSystemInfo();
       else if (path === '/api/get-nonce') r = await apiClient.getNonce();
       else if (path === '/api/config' && method === 'GET') r = await apiClient.getConfig();
+      else if (path === '/api/config' && method === 'POST') r = await apiClient.saveConfig({});
       else if (path === '/api/logs') r = await apiClient.getLogs();
+      else if (path === '/api/logs/clear') r = await apiClient.clearLogs();
       else if (path === '/api/play') r = await apiClient.playSound();
       else if (path === '/api/stop') r = await apiClient.stopSound();
       else if (path === '/api/trigger-bell') r = await apiClient.triggerBell();
       else if (path === '/api/logout') r = await apiClient.logout();
+      else if (path === '/api/verify-auth') r = await apiClient.verifyAuth('dummy_hash', 'dummy_nonce');
+      else if (path === '/upload') {
+        const dummyBlob = new Blob(['dummy wav content'], { type: 'audio/wav' });
+        r = await apiClient.uploadWav(dummyBlob, 'test.wav');
+      }
       else r = await apiClient.checkHealth();
 
       statusEl.textContent = `HTTP ${r.status} (${r.latencyMs}ms)`;

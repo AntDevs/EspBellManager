@@ -1,6 +1,6 @@
 import { EspBellConfig, AudioTrackInfo, SystemStatus, LogEntry } from '../types';
 
-export interface ApiResponse<T> {
+export interface ApiResult<T = unknown> {
   success: boolean;
   status: number;
   data?: T;
@@ -9,6 +9,8 @@ export interface ApiResponse<T> {
   url: string;
   method: string;
 }
+
+export type ApiResponse<T> = ApiResult<T>;
 
 export interface ApiEndpointSpec {
   method: 'GET' | 'POST';
@@ -110,24 +112,31 @@ export const API_ENDPOINTS: ApiEndpointSpec[] = [
 
 class EspBellApiClient {
   private baseUrl = 'https://bell555.local';
+  private authToken: string | null = null;
+  private onAuthChangeCallbacks: Array<(isAuthenticated: boolean) => void> = [];
 
   constructor() {
     try {
-      const saved = localStorage.getItem('espbell_config');
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const savedConfig = localStorage.getItem('espbell_config');
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
         if (parsed.target_esp_url) {
           this.setBaseUrl(parsed.target_esp_url);
         }
+      }
+    } catch {}
+
+    try {
+      const savedToken = localStorage.getItem('espbell_auth_token');
+      if (savedToken) {
+        this.authToken = savedToken;
       }
     } catch {}
   }
 
   public setBaseUrl(url: string) {
     let cleanUrl = (url || '').trim();
-    // Remove trailing slashes
     cleanUrl = cleanUrl.replace(/\/+$/, '');
-    // If user entered just bell555.local or 192.168.1.145, add protocol
     if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = `https://${cleanUrl}`;
     }
@@ -138,39 +147,82 @@ class EspBellApiClient {
     return this.baseUrl || 'https://bell555.local';
   }
 
-  private async request<T>(
+  public setAuthToken(token: string | null) {
+    this.authToken = token;
+    try {
+      if (token) {
+        localStorage.setItem('espbell_auth_token', token);
+      } else {
+        localStorage.removeItem('espbell_auth_token');
+      }
+    } catch {}
+    this.notifyAuthChange();
+  }
+
+  public getAuthToken(): string | null {
+    return this.authToken;
+  }
+
+  public isAuthenticated(): boolean {
+    return !!this.authToken;
+  }
+
+  public onAuthChange(cb: (isAuthenticated: boolean) => void): () => void {
+    this.onAuthChangeCallbacks.push(cb);
+    return () => {
+      this.onAuthChangeCallbacks = this.onAuthChangeCallbacks.filter((c) => c !== cb);
+    };
+  }
+
+  private notifyAuthChange() {
+    const authed = this.isAuthenticated();
+    this.onAuthChangeCallbacks.forEach((cb) => {
+      try {
+        cb(authed);
+      } catch (err) {
+        console.error('Auth change callback error:', err);
+      }
+    });
+  }
+
+  public async request<T>(
     method: 'GET' | 'POST',
     path: string,
     body?: unknown,
     headers: Record<string, string> = {}
-  ): Promise<ApiResponse<T>> {
+  ): Promise<ApiResult<T>> {
     const startTime = performance.now();
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    const url = `${this.baseUrl}${cleanPath}`;
+    const targetBase = this.baseUrl || '';
+    const url = `${targetBase}${cleanPath}`;
     
     try {
+      const requestHeaders: Record<string, string> = {
+        ...headers
+      };
+
+      // Automatically attach Auth token to ALL requests if available
+      if (this.authToken && !requestHeaders['X-Auth-Token'] && !requestHeaders['Authorization']) {
+        requestHeaders['X-Auth-Token'] = this.authToken;
+        requestHeaders['Authorization'] = `Bearer ${this.authToken}`;
+      }
+
       const fetchOptions: RequestInit = {
         method,
-        headers: {
-          ...headers
-        }
+        headers: requestHeaders
       };
 
       if (body !== undefined) {
         if (body instanceof Blob || body instanceof ArrayBuffer) {
           fetchOptions.body = body;
-          if (!headers['Content-Type']) {
-            fetchOptions.headers = {
-              ...fetchOptions.headers,
-              'Content-Type': 'application/octet-stream'
-            };
+          if (!requestHeaders['Content-Type']) {
+            requestHeaders['Content-Type'] = 'application/octet-stream';
           }
         } else if (typeof body === 'object') {
           fetchOptions.body = JSON.stringify(body);
-          fetchOptions.headers = {
-            ...fetchOptions.headers,
-            'Content-Type': 'application/json'
-          };
+          if (!requestHeaders['Content-Type']) {
+            requestHeaders['Content-Type'] = 'application/json';
+          }
         }
       }
 
@@ -180,19 +232,41 @@ class EspBellApiClient {
       let data: T | undefined = undefined;
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        data = await res.json();
+        try {
+          data = await res.json();
+        } catch {}
+      } else {
+        try {
+          const text = await res.text();
+          data = text as unknown as T;
+        } catch {}
       }
 
       if (!res.ok) {
-        return {
+        // If 401 Unauthorized, automatically clear stale token
+        if (res.status === 401 && this.authToken) {
+          console.warn('[EspBellApiClient] Server returned 401 Unauthorized. Clearing local token.');
+          this.setAuthToken(null);
+        }
+
+        let errorText = `HTTP ${res.status}: ${res.statusText || 'Запрос отклонен контроллером (Unauthorized / Ошибка)'}`;
+        if (data && typeof data === 'object' && 'error' in data) {
+          errorText = `HTTP ${res.status}: ${(data as any).error}`;
+        } else if (typeof data === 'string' && data.length > 0 && data.length < 200) {
+          errorText = `HTTP ${res.status}: ${data}`;
+        }
+
+        const errResult = {
           success: false,
           status: res.status,
-          error: `HTTP ${res.status}: ${res.statusText}`,
+          error: errorText,
           data,
           latencyMs,
           url,
           method
         };
+        console.error(`[EspBellApiClient] API Error [${method} ${url}]:`, errResult);
+        return errResult;
       }
 
       return {
@@ -205,101 +279,364 @@ class EspBellApiClient {
       };
     } catch (err: unknown) {
       const latencyMs = Math.round(performance.now() - startTime);
-      const errorMessage = err instanceof Error ? err.message : 'Сетевая ошибка';
-      return {
+      let errorMessage = err instanceof Error ? err.message : 'Сетевая ошибка';
+
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        errorMessage += ' (Возможно, браузер блокирует самоподписанный HTTPS сертификат ESP32. Откройте адрес устройства в новой вкладке и разрешите небезопасное подключение, либо используйте HTTP вместо HTTPS).';
+      }
+
+      const errResult = {
         success: false,
         status: 0,
-        error: errorMessage,
+        error: `Ошибка сети при запросе к ${url}: ${errorMessage}`,
         latencyMs,
         url,
         method
       };
+      console.error(`[EspBellApiClient] Network/Parse Error [${method} ${url}]:`, err, errResult);
+      return errResult;
     }
   }
 
   // 1. Health check
-  async checkHealth() {
-    return this.request<{ status: string; server: string; timestamp: string }>('GET', '/api/health');
+  async checkHealth(): Promise<ApiResult<{ status: string; server: string; timestamp: string }>> {
+    try {
+      return await this.request<{ status: string; server: string; timestamp: string }>('GET', '/api/health');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Ошибка проверки работоспособности (Health check)',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/health`,
+        method: 'GET'
+      };
+    }
   }
 
   // 2. Info / Telemetry
-  async getSystemInfo() {
-    return this.request<{
-      status: string;
-      device: string;
-      firmware: string;
-      runtime: string;
-      uptime_sec: number;
-      heap: { free_bytes: number; total_bytes: number };
-      psram: { free_bytes: number; total_bytes: number };
-      cpu_freq_mhz: number;
-      core_temp_c: number;
-      power: { relay_latch_gpio4: boolean; smart_timeout_sec: number; remaining_sec: number };
-      led: { gpio: number; state: string; color: string };
-      wifi: { mode: string; ssid: string; ip: string; rssi: number };
-      audio: { is_playing: boolean; active_file: string; track_title: string; sample_rate: number; gain: number; duration_sec: number };
-    }>('GET', '/api/info');
+  async getSystemInfo(): Promise<ApiResult<SystemStatus>> {
+    try {
+      return await this.request<SystemStatus>('GET', '/api/info');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось получить системную телеметрию ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/info`,
+        method: 'GET'
+      };
+    }
+  }
+
+  // Alias for getSystemInfo
+  async getInfo(): Promise<ApiResult<SystemStatus>> {
+    return this.getSystemInfo();
   }
 
   // 3. Cryptographic Nonce
-  async getNonce() {
-    return this.request<{ nonce: string; ttl_sec: number }>('GET', '/api/get-nonce');
+  async getNonce(): Promise<ApiResult<{ nonce: string; ttl_sec: number }>> {
+    try {
+      return await this.request<{ nonce: string; ttl_sec: number }>('GET', '/api/get-nonce');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось запросить одноразовый Nonce от контроллера',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/get-nonce`,
+        method: 'GET'
+      };
+    }
   }
 
-  // 4. Verify Auth
-  async verifyAuth(hash: string, nonce: string) {
-    return this.request<{ status: string; token: string; role: string }>('POST', '/api/verify-auth', { hash, nonce });
+  // 4. Verify Auth (SHA-256 Challenge Response Login)
+  async verifyAuth(hash: string, nonce: string): Promise<ApiResult<{ status: string; token: string; role: string }>> {
+    try {
+      const res = await this.request<{ status: string; token: string; role: string }>('POST', '/api/verify-auth', { hash, nonce });
+      if (res.success && res.data?.token) {
+        // Automatically store the session token in apiClient
+        this.setAuthToken(res.data.token);
+      }
+      return res;
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Ошибка аутентификации администратора',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/verify-auth`,
+        method: 'POST'
+      };
+    }
   }
 
   // 5. Config read
-  async getConfig() {
-    return this.request<EspBellConfig>('GET', '/api/config');
+  async getConfig(): Promise<ApiResult<EspBellConfig>> {
+    try {
+      return await this.request<EspBellConfig>('GET', '/api/config');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось прочитать /config.json с ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/config`,
+        method: 'GET'
+      };
+    }
   }
 
   // 6. Config save
-  async saveConfig(config: Partial<EspBellConfig>) {
-    return this.request<{ status: string; message: string; config: EspBellConfig }>('POST', '/api/config', config);
+  async saveConfig(config: Partial<EspBellConfig>): Promise<ApiResult<{ status: string; message: string; config: EspBellConfig }>> {
+    try {
+      return await this.request<{ status: string; message: string; config: EspBellConfig }>('POST', '/api/config', config);
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось сохранить конфигурацию во Flash ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/config`,
+        method: 'POST'
+      };
+    }
   }
 
-  // 7. Upload WAV file
-  async uploadWav(wavBlob: Blob, filename = 'bell.wav', title = 'Пользовательская мелодия') {
-    const params = new URLSearchParams({ filename, title });
-    return this.request<{ status: string; message: string; track: AudioTrackInfo }>(
-      'POST',
-      `/upload?${params.toString()}`,
-      wavBlob,
-      { 'Content-Type': 'audio/wav' }
-    );
+  // 7. Upload WAV file to ESP32 /upload stream
+  async uploadWav(
+    wavBlob: Blob, 
+    filename = 'bell.wav', 
+    title = 'Пользовательская мелодия',
+    authHeaders?: { token?: string; hash?: string; nonce?: string },
+    onProgress?: (percent: number) => void
+  ): Promise<ApiResult<{ status: string; bytes?: number; message?: string }>> {
+    try {
+      const startTime = performance.now();
+      const targetUrl = `${this.baseUrl}/upload`;
+      const token = this.authToken || authHeaders?.token || authHeaders?.hash;
+      const hash = authHeaders?.hash || token;
+      const nonce = authHeaders?.nonce;
+
+      return await new Promise((resolve) => {
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', targetUrl, true);
+
+          if (token) {
+            xhr.setRequestHeader('X-Auth-Token', token);
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          }
+          if (nonce) {
+            xhr.setRequestHeader('X-Auth-Nonce', nonce);
+          }
+          if (hash) {
+            xhr.setRequestHeader('X-Auth-Hash', hash);
+          }
+          xhr.setRequestHeader('X-File-Name', filename);
+
+          if (xhr.upload && onProgress) {
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                onProgress(percent);
+              }
+            };
+          }
+
+          xhr.onload = () => {
+            const latencyMs = Math.round(performance.now() - startTime);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              let data = { status: 'saved', bytes: wavBlob.size, message: xhr.responseText };
+              try {
+                data = JSON.parse(xhr.responseText);
+              } catch {}
+              resolve({
+                success: true,
+                status: xhr.status,
+                data,
+                latencyMs,
+                url: targetUrl,
+                method: 'POST'
+              });
+            } else {
+              if (xhr.status === 401) {
+                this.setAuthToken(null);
+              }
+              const errResult = {
+                success: false,
+                status: xhr.status,
+                error: xhr.responseText || `HTTP ${xhr.status} (ESP32 вернул ошибку: Unauthorized/Доступ запрещен)`,
+                latencyMs,
+                url: targetUrl,
+                method: 'POST'
+              };
+              console.error(`[EspBellApiClient] Upload Error [POST ${targetUrl}]:`, errResult);
+              resolve(errResult);
+            }
+          };
+
+          xhr.onerror = () => {
+            const latencyMs = Math.round(performance.now() - startTime);
+            const errResult = {
+              success: false,
+              status: 0,
+              error: `Сетевой сбой при передаче в ${targetUrl}: соединение сброшено или заблокировано CORS. (Возможно, не принят самоподписанный HTTPS сертификат. Перейдите по адресу устройства в новой вкладке и разрешите подключение, либо используйте HTTP).`,
+              latencyMs,
+              url: targetUrl,
+              method: 'POST'
+            };
+            console.error(`[EspBellApiClient] Upload Network Error [POST ${targetUrl}]:`, errResult);
+            resolve(errResult);
+          };
+
+          xhr.send(wavBlob);
+        } catch (xhrErr: unknown) {
+          const latencyMs = Math.round(performance.now() - startTime);
+          const errResult = {
+            success: false,
+            status: 0,
+            error: xhrErr instanceof Error ? xhrErr.message : 'Исключение при отправке XMLHttpRequest',
+            latencyMs,
+            url: targetUrl,
+            method: 'POST'
+          };
+          console.error(`[EspBellApiClient] Upload Exception [POST ${targetUrl}]:`, xhrErr, errResult);
+          resolve(errResult);
+        }
+      });
+    } catch (err: unknown) {
+      const errResult = {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Сбой при подготовке загрузки файла на ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/upload`,
+        method: 'POST'
+      };
+      console.error(`[EspBellApiClient] Upload Preparation Error [POST ${this.baseUrl}/upload]:`, err, errResult);
+      return errResult;
+    }
   }
 
   // 8. Play sound
-  async playSound() {
-    return this.request<{ status: string; track: string; gain: number }>('POST', '/api/play');
+  async playSound(): Promise<ApiResult<{ status: string; track: string; gain: number }>> {
+    try {
+      return await this.request<{ status: string; track: string; gain: number }>('POST', '/api/play');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось запустить воспроизведение на ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/play`,
+        method: 'POST'
+      };
+    }
   }
 
   // 9. Stop sound
-  async stopSound() {
-    return this.request<{ status: string }>('POST', '/api/stop');
+  async stopSound(): Promise<ApiResult<{ status: string }>> {
+    try {
+      return await this.request<{ status: string }>('POST', '/api/stop');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось остановить звук на ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/stop`,
+        method: 'POST'
+      };
+    }
   }
 
   // 10. Physical Bell Trigger
-  async triggerBell() {
-    return this.request<{ status: string; relay: string; track: string; duration_sec: number }>('POST', '/api/trigger-bell');
+  async triggerBell(): Promise<ApiResult<{ status: string; relay: string; track: string; duration_sec: number }>> {
+    try {
+      return await this.request<{ status: string; relay: string; track: string; duration_sec: number }>('POST', '/api/trigger-bell');
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось активировать звонок (GPIO4 / I2S)',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/trigger-bell`,
+        method: 'POST'
+      };
+    }
   }
 
-  // 11. Logs read
-  async getLogs() {
-    return this.request<{ status: string; count: number; logs: LogEntry[] }>('GET', '/api/logs');
-  }
+  // 11. Logs read (Parses plain text to LogEntry array)
+  async getLogs(): Promise<ApiResult<{ status: string; count: number; logs: LogEntry[] }>> {
+    try {
+      const res = await this.request<string>('GET', '/api/logs');
+      if (!res.success) {
+        return res as any; // pass through the error
+      }
+      
+      const text = res.data || '';
+      const lines = text.split('\n').filter(l => l.trim().length > 0);
+      const parsedLogs: LogEntry[] = lines.map((line, idx) => {
+        // Expected format: [TIMESTAMP] [LEVEL] [TAG] Message...
+        const match = line.match(/^\[(.*?)\]\s+\[(.*?)\]\s+\[(.*?)\]\s+(.*)$/);
+        if (match) {
+          return {
+            id: `log-${idx}`,
+            timestamp: match[1],
+            level: match[2] as any,
+            tag: match[3],
+            message: match[4]
+          };
+        }
+        // Fallback for lines that don't match the format
+        return {
+          id: `log-${idx}`,
+          timestamp: '',
+          level: 'INFO',
+          tag: 'SYS',
+          message: line
+        };
+      });
 
-  // 12. Logs clear
-  async clearLogs() {
-    return this.request<{ status: string; message: string }>('POST', '/api/logs/clear');
+      return {
+        success: true,
+        status: res.status,
+        data: { status: 'ok', count: parsedLogs.length, logs: parsedLogs },
+        latencyMs: res.latencyMs,
+        url: res.url,
+        method: res.method
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Не удалось получить журнал /boot.log с ESP32',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/logs`,
+        method: 'GET'
+      };
+    }
   }
 
   // 13. Logout
-  async logout() {
-    return this.request<{ status: string; message: string }>('GET', '/api/logout');
+  async logout(): Promise<ApiResult<{ status: string; message: string }>> {
+    try {
+      const res = await this.request<{ status: string; message: string }>('POST', '/api/logout');
+      this.setAuthToken(null);
+      return res;
+    } catch (err: unknown) {
+      this.setAuthToken(null);
+      return {
+        success: false,
+        status: 0,
+        error: err instanceof Error ? err.message : 'Ошибка при выполнении выхода',
+        latencyMs: 0,
+        url: `${this.baseUrl}/api/logout`,
+        method: 'POST'
+      };
+    }
   }
 }
 

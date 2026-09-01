@@ -6,6 +6,33 @@ import { createServer as createViteServer } from "vite";
 const app = express();
 const PORT = 3000;
 
+const ALLOWED_ORIGINS = [
+  "https://ais-dev-swk6fukexwkhuc4aqssj7n-855382210040.europe-west2.run.app",
+  "https://ais-pre-swk6fukexwkhuc4aqssj7n-855382210040.europe-west2.run.app",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
+];
+
+// Global CORS Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, X-Auth-Nonce, X-Auth-Hash, X-File-Name, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Favicon handler
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "public/favicon.svg"));
+});
+
 // Body parsers
 app.use(express.json({ limit: "15mb" }));
 app.use(express.raw({ type: ["audio/*", "application/octet-stream"], limit: "15mb" }));
@@ -97,6 +124,9 @@ let systemState = {
 // Store active Nonces for challenge-response auth
 const activeNonces = new Map<string, number>();
 
+// Store active session tokens for authenticated admin requests
+const activeTokens = new Set<string>();
+
 // System log entries (boot.log)
 let systemLogs = [
   {
@@ -172,83 +202,86 @@ function appendLog(level: string, tag: string, message: string) {
   }
 }
 
+/**
+ * Authentication Middleware
+ * Checks for session token or direct hash+nonce verification in headers
+ */
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers["authorization"] || "";
+  const tokenHeader = (req.headers["x-auth-token"] as string) || "";
+  const nonceHeader = (req.headers["x-auth-nonce"] as string) || "";
+  const hashHeader = (req.headers["x-auth-hash"] as string) || "";
+
+  // 1. Check Bearer token or X-Auth-Token against active session tokens
+  let token = tokenHeader;
+  if (!token && authHeader.startsWith("Bearer ")) {
+    token = authHeader.slice(7).trim();
+  }
+
+  if (token && activeTokens.has(token)) {
+    return next();
+  }
+
+  // 2. Check direct Challenge-Response (Nonce + SHA256) headers for stateless single-shot requests
+  if (nonceHeader && hashHeader && activeNonces.has(nonceHeader)) {
+    activeNonces.delete(nonceHeader);
+    const expectedHash = crypto.createHash("sha256").update(activeConfig.admin_password + nonceHeader).digest("hex");
+    if (hashHeader.toLowerCase() === expectedHash.toLowerCase()) {
+      return next();
+    }
+  }
+
+  // Unauthorized: Reject request with 401
+  appendLog("WARNING", "AUTH", `Unauthorized access attempt to protected endpoint: ${req.method} ${req.path}`);
+  return res.status(401).json({
+    status: "error",
+    error: "Unauthorized: Требуется авторизация администратора. Передайте валидный токен в заголовке X-Auth-Token или Authorization.",
+    code: 401
+  });
+}
+
 // -------------------------------------------------------------
 // REST API ROUTES
 // -------------------------------------------------------------
 
-// 1. Health check & API catalog
+// 1. Health check & API catalog (Public)
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     server: "ESP32-S3 Microdot REST API Emulation",
     timestamp: new Date().toISOString(),
     endpoints: [
-      { method: "GET", path: "/api/info", description: "Get ESP32 status & telemetry" },
-      { method: "GET", path: "/api/get-nonce", description: "Request single-use 8-byte auth nonce" },
-      { method: "POST", path: "/api/verify-auth", description: "SHA-256 challenge response login" },
-      { method: "GET", path: "/api/config", description: "Read config.json from Flash" },
-      { method: "POST", path: "/api/config", description: "Save config.json to Flash" },
-      { method: "POST", path: "/upload", description: "Upload binary 16-bit PCM WAV melody" },
-      { method: "POST", path: "/api/play", description: "Trigger I2S DMA audio playback" },
-      { method: "POST", path: "/api/stop", description: "Halt I2S DMA playback" },
-      { method: "POST", path: "/api/trigger-bell", description: "Simulate physical doorbell button" },
-      { method: "GET", path: "/api/logs", description: "Read /boot.log terminal entries" },
-      { method: "POST", path: "/api/logs/clear", description: "Clear log entries" },
-      { method: "GET", path: "/api/logout", description: "Invalidate admin session" }
+      { method: "GET", path: "/api/info", description: "Get ESP32 status & telemetry", authRequired: false },
+      { method: "GET", path: "/api/get-nonce", description: "Request single-use 8-byte auth nonce", authRequired: false },
+      { method: "POST", path: "/api/verify-auth", description: "SHA-256 challenge response login", authRequired: false },
+      { method: "GET", path: "/api/config", description: "Read config.json from Flash", authRequired: true },
+      { method: "POST", path: "/api/config", description: "Save config.json to Flash", authRequired: true },
+      { method: "POST", path: "/upload", description: "Upload binary 16-bit PCM WAV melody", authRequired: true },
+      { method: "POST", path: "/api/play", description: "Trigger I2S DMA audio playback", authRequired: true },
+      { method: "POST", path: "/api/stop", description: "Halt I2S DMA playback", authRequired: true },
+      { method: "POST", path: "/api/trigger-bell", description: "Simulate physical doorbell button", authRequired: false },
+      { method: "GET", path: "/api/logs", description: "Read /boot.log terminal entries", authRequired: false },
+      { method: "POST", path: "/api/logs/clear", description: "Clear log entries", authRequired: true },
+      { method: "GET", path: "/api/logout", description: "Invalidate admin session", authRequired: false }
     ]
   });
 });
 
-// 2. System Status & Telemetry
+// 2. System Status & Telemetry (Public)
 app.get("/api/info", (req, res) => {
-  systemState.uptimeSeconds += 2;
-  systemState.coreTemperatureC = parseFloat((41.0 + Math.random() * 1.5).toFixed(1));
   systemState.freeHeapBytes = 280000 + Math.floor(Math.random() * 8000);
   
   res.json({
-    status: "ok",
-    device: systemState.deviceModel,
-    firmware: systemState.firmwareVersion,
-    runtime: systemState.runtimeEnv,
-    uptime_sec: systemState.uptimeSeconds,
-    heap: {
-      free_bytes: systemState.freeHeapBytes,
-      total_bytes: systemState.totalHeapBytes
-    },
-    psram: {
-      free_bytes: systemState.psramFreeBytes,
-      total_bytes: systemState.psramTotalBytes
-    },
-    cpu_freq_mhz: systemState.cpuFrequencyMhz,
-    core_temp_c: systemState.coreTemperatureC,
-    power: {
-      relay_latch_gpio4: systemState.relayState,
-      smart_timeout_sec: activeConfig.smart_timeout_sec,
-      remaining_sec: systemState.smartTimeoutRemaining
-    },
-    led: {
-      gpio: activeConfig.indicator_led_pin,
-      state: systemState.neoPixelState,
-      color: systemState.neoPixelColor
-    },
-    wifi: {
-      mode: systemState.wifiMode,
-      ssid: activeConfig.wifi_ssid,
-      ip: systemState.ipAddress,
-      rssi: systemState.rssi
-    },
-    audio: {
-      is_playing: systemState.isPlaying,
-      active_file: currentTrack.filename,
-      track_title: currentTrack.title,
-      sample_rate: currentTrack.sampleRate,
-      gain: activeConfig.gain_scale,
-      duration_sec: currentTrack.durationSeconds
-    }
+    availableBytes: 1534000,
+    maxFileBytes: 4194304,
+    allowedExtensions: ["mp3", "wav"],
+    isPlaying: systemState.isPlaying,
+    freeHeap: systemState.freeHeapBytes,
+    device: "ESP32-S3"
   });
 });
 
-// 3. Cryptographic Nonce Challenge
+// 3. Cryptographic Nonce Challenge (Public)
 app.get("/api/get-nonce", (req, res) => {
   const nonce = crypto.randomBytes(8).toString("hex");
   activeNonces.set(nonce, Date.now());
@@ -263,7 +296,7 @@ app.get("/api/get-nonce", (req, res) => {
   res.json({ nonce, ttl_sec: activeConfig.nonce_ttl_sec || 30 });
 });
 
-// 4. Verify Auth (SHA-256 Challenge Response)
+// 4. Verify Auth (SHA-256 Challenge Response - Public entry point for login)
 app.post("/api/verify-auth", (req, res) => {
   const { hash, nonce } = req.body || {};
   
@@ -280,7 +313,8 @@ app.post("/api/verify-auth", (req, res) => {
   
   if (hash && hash.toLowerCase() === expectedHash.toLowerCase()) {
     const sessionToken = crypto.randomBytes(16).toString("hex");
-    appendLog("INFO", "AUTH", "Admin authenticated successfully via SHA-256 challenge");
+    activeTokens.add(sessionToken);
+    appendLog("INFO", "AUTH", "Admin authenticated successfully via SHA-256 challenge. Session token issued.");
     return res.json({ status: "ok", token: sessionToken, role: "admin" });
   } else {
     appendLog("WARNING", "AUTH", "Auth rejected: Hash mismatch for admin password");
@@ -288,29 +322,43 @@ app.post("/api/verify-auth", (req, res) => {
   }
 });
 
-// 5. Get Configuration
-app.get("/api/config", (req, res) => {
+// 5. Get Configuration (Protected: requires auth)
+app.get("/api/config", requireAuth, (req, res) => {
   res.json(activeConfig);
 });
 
-// 6. Save Configuration
-app.post("/api/config", (req, res) => {
+// 6. Save Configuration (Protected: requires auth)
+app.post("/api/config", requireAuth, (req, res) => {
   const newConfig = req.body;
   if (!newConfig || typeof newConfig !== "object") {
-    return res.status(400).json({ status: "error", message: "Invalid configuration payload" });
+    return res.status(400).json({ error: "Пустые данные конфигурации" });
   }
   
-  activeConfig = { ...activeConfig, ...newConfig };
-  appendLog("INFO", "CONFIG", "Updated /config.json in SPI Flash. Parameters reloaded.");
-  res.json({ status: "ok", message: "Configuration saved to /config.json", config: activeConfig });
+  const updatable = [
+    'boot_mode', 'smart_timeout_sec', 'auth_smart_timeout_sec', 'repeat_count',
+    'max_play_duration_sec', 'fade_out_ms', 'resume_playback',
+    'last_play_pos_bytes', 'last_play_pos_sec',
+    'wifi_ssid', 'wifi_password', 'upload_password', 'ap_ssid', 'ap_password'
+  ];
+
+  for (const key of updatable) {
+    if (key in newConfig) {
+      // simulate the same filtering logic
+      (activeConfig as any)[key] = newConfig[key];
+    }
+  }
+
+  appendLog("INFO", "CONFIG", "Updated config.json in SPI Flash. Parameters reloaded.");
+  res.json({ status: "saved" });
 });
 
-// 7. Binary Audio File Upload (POST /upload)
-app.post("/upload", (req, res) => {
+// 7. Binary Audio File Upload (Protected: requires auth)
+app.post("/upload", requireAuth, (req, res) => {
   let sizeBytes = 0;
   let fileBuffer: Buffer | null = null;
-  let trackTitle = req.query.title ? String(req.query.title) : "Пользовательская мелодия";
-  let filename = req.query.filename ? String(req.query.filename) : activeConfig.target_filename;
+  const headerFilename = req.headers["x-file-name"] ? String(req.headers["x-file-name"]) : "";
+  let trackTitle = req.query.title ? String(req.query.title) : (headerFilename ? headerFilename.replace(/\.[^/.]+$/, "") : "Пользовательская мелодия");
+  let filename = headerFilename || (req.query.filename ? String(req.query.filename) : activeConfig.target_filename);
   
   if (Buffer.isBuffer(req.body)) {
     fileBuffer = req.body;
@@ -323,11 +371,10 @@ app.post("/upload", (req, res) => {
   }
   
   if (!fileBuffer || sizeBytes === 0) {
-    // Fallback if empty request
     sizeBytes = 256000;
   }
   
-  // Calculate approximate duration based on 44100Hz 16-bit stereo (176400 bytes/sec)
+  // Calculate duration
   const durationSec = parseFloat(Math.max(0.5, (sizeBytes - 44) / 176400).toFixed(1));
   
   currentTrack = {
@@ -352,8 +399,8 @@ app.post("/upload", (req, res) => {
   });
 });
 
-// 8. Start Playback (POST /api/play)
-app.post("/api/play", (req, res) => {
+// 8. Start Playback (Protected: requires auth)
+app.post("/api/play", requireAuth, (req, res) => {
   systemState.isPlaying = true;
   systemState.neoPixelState = "playing";
   systemState.neoPixelColor = "#06b6d4";
@@ -366,8 +413,8 @@ app.post("/api/play", (req, res) => {
   res.json({ status: "playing", track: currentTrack.filename, gain: activeConfig.gain_scale });
 });
 
-// 9. Stop Playback (POST /api/stop)
-app.post("/api/stop", (req, res) => {
+// 9. Stop Playback (Protected: requires auth)
+app.post("/api/stop", requireAuth, (req, res) => {
   systemState.isPlaying = false;
   systemState.neoPixelState = "idle";
   systemState.neoPixelColor = "#10b981";
@@ -376,7 +423,7 @@ app.post("/api/stop", (req, res) => {
   res.json({ status: "stopped" });
 });
 
-// 10. Physical Bell Trigger Simulation
+// 10. Physical Bell Trigger Simulation (Public: simulates physical button on doorbell)
 app.post("/api/trigger-bell", (req, res) => {
   systemState.isPlaying = true;
   systemState.relayState = true;
@@ -396,36 +443,28 @@ app.post("/api/trigger-bell", (req, res) => {
   });
 });
 
-// 11. Read Logs (GET /api/logs)
+// 11. Read Logs (Public)
 app.get("/api/logs", (req, res) => {
-  res.json({
-    status: "ok",
-    count: systemLogs.length,
-    logs: systemLogs
-  });
+  const content = systemLogs.map(l => `[${l.timestamp}] [${l.level}] [${l.tag}] ${l.message}`).join("\n");
+  res.type("text/plain; charset=utf-8").send(content);
 });
 
-// 12. Clear Logs (POST /api/logs/clear)
-app.post("/api/logs/clear", (req, res) => {
-  systemLogs = [
-    {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString(),
-      level: "INFO",
-      tag: "SYSTEM",
-      message: "System log buffer cleared by administrator."
-    }
-  ];
-  res.json({ status: "ok", message: "Logs cleared" });
-});
-
-// 13. Logout (GET /api/logout)
-app.get("/api/logout", (req, res) => {
+// 13. Logout (Public)
+app.post("/api/logout", (req, res) => {
+  const authHeader = req.headers["authorization"] || "";
+  const tokenHeader = (req.headers["x-auth-token"] as string) || "";
+  let token = tokenHeader;
+  if (!token && authHeader.startsWith("Bearer ")) {
+    token = authHeader.slice(7).trim();
+  }
+  if (token) {
+    activeTokens.delete(token);
+  }
   appendLog("INFO", "AUTH", "Admin session logged out via /api/logout");
-  res.json({ status: "ok", message: "Logged out" });
+  res.json({ status: "ok" });
 });
 
-// 14. Templates List (GET /api/templates)
+// 14. Templates List (Public)
 app.get("/api/templates", (req, res) => {
   res.json({
     status: "ok",

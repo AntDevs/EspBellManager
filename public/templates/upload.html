@@ -81,10 +81,56 @@
         </div>
       </div>
 
+      <!-- Progress & Status Bar -->
+      <div id="tpl-upload-progress-container" class="hidden space-y-2 bg-slate-900/90 p-4 rounded-xl border border-slate-800">
+        <div class="flex items-center justify-between text-xs font-mono">
+          <span id="tpl-upload-status-label" class="text-cyan-400 font-bold">Подготовка файла...</span>
+          <span id="tpl-upload-percent" class="text-slate-400">0%</span>
+        </div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="tpl-upload-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 w-0"></div>
+        </div>
+      </div>
+
+      <!-- Error Message Box (shown on any error, keeps user on the screen) -->
+      <div id="tpl-upload-error-box" class="hidden p-4 rounded-2xl bg-rose-950/70 border border-rose-800/90 text-rose-200 text-xs space-y-2 animate-fadeIn">
+        <div class="flex items-center gap-2 font-bold text-rose-300 text-sm">
+          <span>⚠️ Ошибка при обработке или передаче файла</span>
+        </div>
+        <p id="tpl-upload-error-message" class="text-rose-200 leading-relaxed font-mono">
+          Не удалось передать аудиопоток на устройство ESP32.
+        </p>
+        <div class="pt-1 flex items-center justify-between text-[11px] text-rose-300/80 border-t border-rose-900/60">
+          <span>Окно остается открытым. Вы можете изменить параметры или повторить отправку.</span>
+          <button id="btn-dismiss-upload-error" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-900 rounded-lg text-rose-200 font-semibold transition-colors">
+            Закрыть уведомление
+          </button>
+        </div>
+      </div>
+
+      <!-- Success Notification Box -->
+      <div id="tpl-upload-success-box" class="hidden p-4 rounded-2xl bg-emerald-950/70 border border-emerald-800/90 text-emerald-200 text-xs space-y-2 animate-fadeIn">
+        <div class="flex items-center gap-2 font-bold text-emerald-300 text-sm">
+          <span>✅ Файл успешно загружен в Flash-память ESP32!</span>
+        </div>
+        <p id="tpl-upload-success-message" class="text-emerald-200 leading-relaxed">
+          Мелодия bell.wav (32 кГц 16-бит Моно) сохранена и готова к воспроизведению.
+        </p>
+        <div class="pt-1 flex items-center gap-2">
+          <button id="btn-goto-main" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md transition-colors">
+            Перейти в Главное меню
+          </button>
+        </div>
+      </div>
+
       <!-- Action Button -->
-      <div class="pt-2 flex items-center justify-end gap-3">
-        <button id="btn-encode-upload" data-action="encodeAndUpload" class="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 active:scale-95 transition-all">
-          <span>⚡ Сконвертировать и загрузить на ESP32</span>
+      <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="text-xs text-slate-500 font-mono">
+          <span>Целевой эндпоинт: </span>
+          <span id="tpl-upload-target-url" class="text-cyan-400 font-bold">/upload</span>
+        </div>
+        <button id="btn-encode-upload" data-action="encodeAndUpload" class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-500/25 active:scale-95 transition-all">
+          <span id="btn-encode-upload-label">⚡ Сконвертировать и загрузить на ESP32</span>
         </button>
       </div>
     </div>

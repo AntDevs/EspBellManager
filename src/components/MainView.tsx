@@ -8,6 +8,7 @@ interface MainViewProps {
   config: EspBellConfig;
   systemStatus: SystemStatus;
   isPlaying: boolean;
+  isAuthenticated: boolean;
   onPlayTrack: () => void;
   onStopTrack: () => void;
   onTriggerBellRing: () => void;
@@ -27,6 +28,7 @@ export const MainView: React.FC<MainViewProps> = ({
   config,
   systemStatus,
   isPlaying,
+  isAuthenticated,
   onPlayTrack,
   onStopTrack,
   onTriggerBellRing,
@@ -128,36 +130,62 @@ export const MainView: React.FC<MainViewProps> = ({
     if (binderRef.current) {
       binderRef.current.update({
         track: {
-          title: currentTrack.title,
-          format: `${currentTrack.format} • ${currentTrack.sampleRate} Hz`,
-          sizeStr: `${(currentTrack.sizeBytes / 1024).toFixed(1)} KB`,
-          durationStr: `${currentTrack.durationSeconds.toFixed(1)} сек`,
+          title: currentTrack.title || config.target_filename || 'bell.wav',
+          format: `${currentTrack.format || 'WAV'} • ${currentTrack.sampleRate || 44100} Hz`,
+          sizeStr: currentTrack.sizeBytes ? `${(currentTrack.sizeBytes / 1024).toFixed(1)} KB` : 'Н/Д',
+          durationStr: currentTrack.durationSeconds ? `${currentTrack.durationSeconds.toFixed(1)} сек` : 'Н/Д',
         },
         power: {
-          badge: systemStatus.relayState ? 'GPIO4 HIGH (Active)' : 'GPIO4 LOW (Standby)',
-          timeoutRemaining: `${systemStatus.smartTimeoutRemaining} сек`,
+          badge: isPlaying ? 'I2S Active (Playing)' : 'I2S Standby',
+          timeoutRemaining: `${config.smart_timeout_sec} сек`,
         },
         system: {
-          heapFree: `${(systemStatus.freeHeapBytes / 1024).toFixed(0)} KB Free`,
-          temperature: `${systemStatus.coreTemperatureC.toFixed(1)} °C`,
-          wifiIp: systemStatus.ipAddress,
-          wifiSsid: 'Home_WiFi_2.4G',
-          wifiRssi: `${systemStatus.rssi} dBm`,
-          ledStyle: { backgroundColor: systemStatus.neoPixelColor },
+          heapFree: `${(systemStatus.freeHeap / 1024).toFixed(0)} KB Free`,
+          temperature: `Н/Д`,
+          wifiIp: 'ESP32 IP / Host',
+          wifiSsid: config.wifi_ssid || config.ap_ssid || 'Н/Д',
+          wifiRssi: `Н/Д`,
+          ledStyle: { backgroundColor: isPlaying ? '#06b6d4' : '#10b981' },
         },
         config: {
-          gainStr: `${Math.round(config.gain_scale * 100)}% (${config.gain_scale}x)`,
-          gain_scale: config.gain_scale,
+          gainStr: `Управление громкостью отключено`,
+          gain_scale: 1,
         },
       });
 
-      // Update play button label
+      // Update play button label and state
+      const playBtn = containerRef.current?.querySelector('#btn-play-pause') as HTMLButtonElement | null;
       const playLabel = containerRef.current?.querySelector('#tpl-play-label');
       if (playLabel) {
         playLabel.textContent = isPlaying ? '⏹ Остановить' : '▶ Тест звука';
       }
+      if (playBtn) {
+        if (!isAuthenticated) {
+          playBtn.disabled = true;
+          playBtn.title = 'Требуется авторизация';
+          playBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          playBtn.disabled = false;
+          playBtn.title = '';
+          playBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
+
+      // Update volume slider state
+      const volSlider = containerRef.current?.querySelector('#vol-slider') as HTMLInputElement | null;
+      if (volSlider) {
+        if (!isAuthenticated) {
+          volSlider.disabled = true;
+          volSlider.title = 'Требуется авторизация';
+          volSlider.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          volSlider.disabled = false;
+          volSlider.title = '';
+          volSlider.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
     }
-  }, [currentTrack, systemStatus, config, isPlaying]);
+  }, [currentTrack, systemStatus, config, isPlaying, isAuthenticated]);
 
   // Pure container mount point
   return <div ref={containerRef} id="main-view-container" className="w-full" />;

@@ -5,7 +5,7 @@ import { loadHtmlTemplate, bindTemplate } from '../utils/templateBinder';
 interface LogsViewProps {
   logs: LogEntry[];
   systemStatus: SystemStatus;
-  onClearLogs: () => void;
+  isAuthenticated: boolean;
   onRefreshLogs: () => void;
 }
 
@@ -15,7 +15,7 @@ interface LogsViewProps {
  */
 export const LogsView: React.FC<LogsViewProps> = ({
   logs,
-  onClearLogs,
+  isAuthenticated,
   onRefreshLogs,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -72,7 +72,8 @@ export const LogsView: React.FC<LogsViewProps> = ({
               onRefreshLogs();
             },
             clearLogs: () => {
-              onClearLogs();
+              // The real ESP32 API does not support clearing logs
+              alert('Очистка логов (boot.log) не поддерживается на уровне прошивки ESP32.');
             },
           },
         });
@@ -94,9 +95,24 @@ export const LogsView: React.FC<LogsViewProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    renderLogs(logs);
-  }, [logs]);
+    useEffect(() => {
+      renderLogs(logs);
+    }, [logs]);
 
-  return <div ref={containerRef} id="logs-view-container" className="w-full" />;
+    useEffect(() => {
+      const clearBtn = containerRef.current?.querySelector('#btn-clear-logs') as HTMLButtonElement | null;
+      if (clearBtn) {
+        if (!isAuthenticated) {
+          clearBtn.disabled = true;
+          clearBtn.title = 'Требуется авторизация';
+          clearBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          clearBtn.disabled = false;
+          clearBtn.title = '';
+          clearBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
+    }, [isAuthenticated, logs]); // Add logs to dependency as re-rendering might reset DOM states occasionally
+
+    return <div ref={containerRef} id="logs-view-container" className="w-full" />;
 };

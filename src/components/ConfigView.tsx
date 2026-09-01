@@ -38,13 +38,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
         const dataModel = {
           smart_timeout_sec: config.smart_timeout_sec,
-          target_filename: config.target_filename,
-          gain_scale: config.gain_scale,
-          sample_rate: config.i2s_sample_rate,
+          target_filename: 'bell.wav',
+          gain_scale: 1,
+          sample_rate: 44100,
           wifi_ssid: config.wifi_ssid,
-          wifi_password: config.wifi_password,
-          admin_password: config.admin_password,
-          hostname: `${config.wifi_ap_ssid || 'bell555'}.local`,
+          wifi_password: config.wifi_password || '',
+          ap_ssid: config.ap_ssid || '',
+          ap_password: config.ap_password || '',
+          admin_password: config.upload_password || '',
+          hostname: `${config.ap_ssid || 'bell555'}.local`,
           target_esp_url: config.target_esp_url || 'https://bell555.local',
         };
 
@@ -78,7 +80,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     statusEl.textContent = `✅ Успешное подключение к ESP32 (${res.latencyMs}ms)! Устройство: ${res.data?.device || 'ESP32-S3'}`;
                   } else {
                     statusEl.className = 'mt-2 text-xs font-mono text-rose-400 font-bold bg-rose-950/60 p-2.5 rounded-xl border border-rose-800/80';
-                    statusEl.textContent = `⚠️ Ответ от ${apiClient.getBaseUrl()}/api/info: ${res.error || `HTTP ${res.status}`}. Проверьте доступность устройства в локальной сети и сертификат.`;
+                    statusEl.textContent = `⚠️ Ответ от ${apiClient.getBaseUrl()}/api/info: ${res.error || `HTTP ${res.status}`}. Проверьте доступность устройства.`;
                   }
                 }
               } catch (err: any) {
@@ -88,16 +90,19 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 }
               }
             },
-            saveConfig: () => {
+            saveConfig: async () => {
               if (!containerRef.current) return;
               const timeoutInput = containerRef.current.querySelector('#cfg-timeout') as HTMLInputElement | null;
-              const fileInput = containerRef.current.querySelector('#cfg-filename') as HTMLInputElement | null;
-              const gainInput = containerRef.current.querySelector('#cfg-gain') as HTMLInputElement | null;
-              const rateInput = containerRef.current.querySelector('#cfg-samplerate') as HTMLSelectElement | null;
               const ssidInput = containerRef.current.querySelector('#cfg-wifi-ssid') as HTMLInputElement | null;
               const passInput = containerRef.current.querySelector('#cfg-wifi-pass') as HTMLInputElement | null;
+              const apSsidInput = containerRef.current.querySelector('#cfg-ap-ssid') as HTMLInputElement | null;
+              const apPassInput = containerRef.current.querySelector('#cfg-ap-pass') as HTMLInputElement | null;
               const adminPassInput = containerRef.current.querySelector('#cfg-admin-pass') as HTMLInputElement | null;
               const espUrlInput = containerRef.current.querySelector('#cfg-esp-target-url') as HTMLInputElement | null;
+              const saveBtn = containerRef.current.querySelector('#btn-save-cfg') as HTMLButtonElement | null;
+              const statusBox = containerRef.current.querySelector('#cfg-save-status-box') as HTMLElement | null;
+              const statusTitle = containerRef.current.querySelector('#cfg-save-status-title') as HTMLElement | null;
+              const statusDetail = containerRef.current.querySelector('#cfg-save-status-detail') as HTMLElement | null;
 
               const targetUrl = espUrlInput?.value?.trim() || 'https://bell555.local';
               apiClient.setBaseUrl(targetUrl);
@@ -105,17 +110,49 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               const updated: EspBellConfig = {
                 ...config,
                 smart_timeout_sec: timeoutInput ? parseInt(timeoutInput.value) || 180 : config.smart_timeout_sec,
-                target_filename: fileInput ? fileInput.value : config.target_filename,
-                gain_scale: gainInput ? parseFloat(gainInput.value) || 1.0 : config.gain_scale,
-                i2s_sample_rate: rateInput ? parseInt(rateInput.value) || 44100 : config.i2s_sample_rate,
                 wifi_ssid: ssidInput ? ssidInput.value : config.wifi_ssid,
-                wifi_password: passInput ? passInput.value : config.wifi_password,
-                admin_password: adminPassInput ? adminPassInput.value : config.admin_password,
+                wifi_password: passInput?.value || config.wifi_password,
+                ap_ssid: apSsidInput ? apSsidInput.value : config.ap_ssid,
+                ap_password: apPassInput?.value || config.ap_password,
+                upload_password: adminPassInput?.value || config.upload_password,
                 target_esp_url: targetUrl,
               };
 
-              onSaveConfig(updated);
-              alert(`Параметры и шлюз REST API (${targetUrl}) успешно сохранены!`);
+              if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Сохранение...';
+              }
+
+              try {
+                const res = await apiClient.saveConfig(updated);
+                onSaveConfig(updated);
+
+                if (statusBox && statusTitle && statusDetail) {
+                  statusBox.classList.remove('hidden');
+                  if (res.success) {
+                    statusBox.className = 'p-4 rounded-2xl bg-emerald-950/70 border border-emerald-800/90 text-emerald-200 text-xs space-y-1 animate-fadeIn';
+                    statusTitle.textContent = '✅ Конфигурация успешно сохранена на ESP32!';
+                    statusDetail.textContent = `Параметры записаны в Flash-память (/config.json) и сохранены локально. Шлюз: ${targetUrl}`;
+                  } else {
+                    statusBox.className = 'p-4 rounded-2xl bg-amber-950/70 border border-amber-800/90 text-amber-200 text-xs space-y-1 animate-fadeIn';
+                    statusTitle.textContent = '⚠️ Настройки сохранены локально в браузере';
+                    statusDetail.textContent = `Устройство ${targetUrl} вернуло: ${res.error || `HTTP ${res.status}`}.`;
+                  }
+                }
+              } catch (err: any) {
+                onSaveConfig(updated);
+                if (statusBox && statusTitle && statusDetail) {
+                  statusBox.classList.remove('hidden');
+                  statusBox.className = 'p-4 rounded-2xl bg-rose-950/70 border border-rose-800/90 text-rose-200 text-xs space-y-1 animate-fadeIn';
+                  statusTitle.textContent = '❌ Ошибка записи на ESP32';
+                  statusDetail.textContent = `Исключение сети: ${err?.message || 'Не удалось связаться с контроллером'}. Настройки сохранены локально.`;
+                }
+              } finally {
+                if (saveBtn) {
+                  saveBtn.disabled = false;
+                  saveBtn.textContent = 'Сохранить во Flash';
+                }
+              }
             },
             resetConfig: () => {
               if (confirm('Сбросить все параметры к значениям по умолчанию?')) {
@@ -133,6 +170,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     hostname: `${initialConfig.wifi_ap_ssid || 'bell555'}.local`,
                     target_esp_url: initialConfig.target_esp_url,
                   });
+                }
+                const statusBox = containerRef.current?.querySelector('#cfg-save-status-box') as HTMLElement | null;
+                const statusTitle = containerRef.current?.querySelector('#cfg-save-status-title') as HTMLElement | null;
+                const statusDetail = containerRef.current?.querySelector('#cfg-save-status-detail') as HTMLElement | null;
+                if (statusBox && statusTitle && statusDetail) {
+                  statusBox.classList.remove('hidden');
+                  statusBox.className = 'p-4 rounded-2xl bg-slate-900 border border-slate-700 text-slate-200 text-xs space-y-1 animate-fadeIn';
+                  statusTitle.textContent = 'ℹ️ Параметры сброшены к заводским настройкам по умолчанию';
+                  statusDetail.textContent = 'Для записи заводских значений на ESP32 нажмите «Сохранить во Flash».';
                 }
               }
             },

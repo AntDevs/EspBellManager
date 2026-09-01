@@ -88,7 +88,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               e.preventDefault();
               const input = containerRef.current?.querySelector('#login-password-input') as HTMLInputElement | null;
               const errorBox = containerRef.current?.querySelector('#login-error-box');
+              const errorText = containerRef.current?.querySelector('#login-error-text');
+              const submitBtn = containerRef.current?.querySelector('[data-action="submitLogin"]') as HTMLButtonElement | null;
               const password = input?.value || '';
+
+              if (errorBox) errorBox.classList.add('hidden');
+              if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Проверка...';
+              }
 
               try {
                 const userHash = await authenticateWithPassword(password, currentNonceRef.current);
@@ -98,14 +106,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   onLoginSuccess();
                   onClose();
                 } else {
+                  console.error('Login failed. Auth response:', authRes);
                   if (errorBox) {
                     errorBox.classList.remove('hidden');
+                    if (errorText) {
+                      errorText.textContent = authRes.error 
+                        ? `Ошибка проверки подписи ESP32: ${authRes.error}`
+                        : 'Неверный пароль администратора. Попробуйте еще раз.';
+                    }
                   }
                   fetchFreshNonce();
+                  if (input) input.focus();
                 }
-              } catch {
+              } catch (err: any) {
+                console.error('Crypto Auth Error details:', err);
                 if (errorBox) {
                   errorBox.classList.remove('hidden');
+                  if (errorText) {
+                    errorText.textContent = `Ошибка криптографической аутентификации: ${err?.message || 'Сбой хеширования'}`;
+                  }
+                }
+                if (input) input.focus();
+              } finally {
+                if (submitBtn) {
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Авторизоваться';
                 }
               }
             },

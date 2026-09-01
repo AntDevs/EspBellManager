@@ -33,17 +33,21 @@ export interface AudioProcessOptions {
   gain?: number; // Gain multiplier (0.1 - 3.0)
   fadeInMs?: number; // In milliseconds
   fadeOutMs?: number; // In milliseconds
-  targetSampleRate?: number; // 44100 or 22050
+  targetSampleRate?: number; // 32000 (default for ESP32)
+  channels?: number; // 1 (mono default)
+  maxSizeBytes?: number; // e.g. 4194304
 }
 
 /**
- * Processes audio (crop, gain, fade-in/out, resample, mono-to-stereo) and encodes into standard 16-bit PCM WAV
+ * Processes audio (crop, gain, fade-in/out, resample to 32kHz mono) and encodes into standard 16-bit PCM WAV
+ * Matches the exact audio.js pipeline from EspBellAdmin
  */
 export async function processAndEncodeWav(
   sourceBuffer: AudioBuffer,
   options: AudioProcessOptions = {}
 ): Promise<{ blob: Blob; arrayBuffer: ArrayBuffer; duration: number; sampleRate: number; channels: number }> {
-  const targetSampleRate = options.targetSampleRate || 44100;
+  const targetSampleRate = options.targetSampleRate || 32000;
+  const targetChannels = options.channels !== undefined ? options.channels : 1; // 1 = Mono
   const startSec = Math.max(0, options.startTime || 0);
   const maxAvailableDuration = Math.max(0, sourceBuffer.duration - startSec);
   const durationSec = options.duration ? Math.min(options.duration, maxAvailableDuration) : maxAvailableDuration;
@@ -52,12 +56,11 @@ export async function processAndEncodeWav(
     throw new Error('Длительность фрагмента слишком мала (менее 0.05с)');
   }
 
-  const numChannels = 2; // ESP32 I2S expects 16-bit stereo
   const totalFrames = Math.floor(durationSec * targetSampleRate);
   
   // Use OfflineAudioContext to render the trimmed, resampled and gain-adjusted audio
   const offlineCtx = new OfflineAudioContext(
-    numChannels,
+    targetChannels,
     totalFrames,
     targetSampleRate
   );
@@ -90,80 +93,70 @@ export async function processAndEncodeWav(
   sourceNode.start(0, startSec, durationSec);
 
   const renderedBuffer = await offlineCtx.startRendering();
-  const wavArrayBuffer = encodeAudioBufferToWav16Bit(renderedBuffer);
+  
+  // Convert rendered AudioBuffer to 16-bit PCM WAV array buffer with max size truncation if needed
+  const maxSizeBytes = options.maxSizeBytes || 4194304;
+  const wavArrayBuffer = encodeAudioBufferToWav16Bit(renderedBuffer, maxSizeBytes);
   const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+
+  const finalDuration = (wavArrayBuffer.byteLength - 44) / (targetSampleRate * targetChannels * 2);
 
   return {
     blob: wavBlob,
     arrayBuffer: wavArrayBuffer,
-    duration: durationSec,
+    duration: Math.max(0.1, finalDuration),
     sampleRate: targetSampleRate,
-    channels: numChannels,
+    channels: targetChannels,
   };
 }
 
 /**
- * Encodes an AudioBuffer into a binary PCM 16-bit stereo WAV with canonical 44-byte RIFF header
+ * Encodes an AudioBuffer into a binary PCM 16-bit WAV with canonical 44-byte RIFF header
+ * Supports 1 or 2 channels and optional max file size clamping (from audio.js)
  */
-export function encodeAudioBufferToWav16Bit(audioBuffer: AudioBuffer): ArrayBuffer {
-  const numChannels = audioBuffer.numberOfChannels;
+export function encodeAudioBufferToWav16Bit(audioBuffer: AudioBuffer, maxSizeBytes = 4194304): ArrayBuffer {
+  const numOfChan = audioBuffer.numberOfChannels;
   const sampleRate = audioBuffer.sampleRate;
-  const bitsPerSample = 16;
-  const bytesPerSample = bitsPerSample / 8;
-  const blockAlign = numChannels * bytesPerSample;
-  
-  const length = audioBuffer.length;
-  const dataByteLength = length * blockAlign;
-  const buffer = new ArrayBuffer(44 + dataByteLength);
+  const bytesPerFrame = numOfChan * 2; // 16-bit = 2 bytes per sample
+
+  const maxDataBytes = Math.max(0, maxSizeBytes - 44);
+  const maxFrames = Math.floor(maxDataBytes / bytesPerFrame);
+  const framesToEncode = Math.min(audioBuffer.length, maxFrames);
+  const dataChunkSize = framesToEncode * bytesPerFrame;
+  const fileLength = dataChunkSize + 44;
+
+  const buffer = new ArrayBuffer(fileLength);
   const view = new DataView(buffer);
+  let pos = 0;
 
-  // RIFF identifier 'RIFF'
-  writeString(view, 0, 'RIFF');
-  // RIFF chunk length = file size - 8
-  view.setUint32(4, 36 + dataByteLength, true);
-  // RIFF type 'WAVE'
-  writeString(view, 8, 'WAVE');
-  
-  // Format chunk identifier 'fmt '
-  writeString(view, 12, 'fmt ');
-  // Format chunk length = 16 for PCM
-  view.setUint32(16, 16, true);
-  // Audio format 1 = PCM (uncompressed)
-  view.setUint16(20, 1, true);
-  // Channels
-  view.setUint16(22, numChannels, true);
-  // Sample rate
-  view.setUint32(24, sampleRate, true);
-  // Byte rate = SampleRate * NumChannels * BitsPerSample/8
-  view.setUint32(28, sampleRate * blockAlign, true);
-  // Block align
-  view.setUint16(32, blockAlign, true);
-  // Bits per sample
-  view.setUint16(34, bitsPerSample, true);
-  
-  // Data chunk identifier 'data'
-  writeString(view, 36, 'data');
-  // Data chunk length
-  view.setUint32(40, dataByteLength, true);
+  function setUint16(data: number) { view.setUint16(pos, data, true); pos += 2; }
+  function setUint32(data: number) { view.setUint32(pos, data, true); pos += 4; }
 
-  // Write interleaved PCM 16-bit samples
-  const channelData: Float32Array[] = [];
-  for (let i = 0; i < numChannels; i++) {
-    channelData.push(audioBuffer.getChannelData(i));
+  setUint32(0x46464952); // "RIFF"
+  setUint32(fileLength - 8);
+  setUint32(0x45564157); // "WAVE"
+  setUint32(0x20746d66); // "fmt "
+  setUint32(16);
+  setUint16(1);          // PCM
+  setUint16(numOfChan);
+  setUint32(sampleRate);
+  setUint32(sampleRate * bytesPerFrame);
+  setUint16(bytesPerFrame);
+  setUint16(16);
+  setUint32(0x61746164); // "data"
+  setUint32(dataChunkSize);
+
+  const channels: Float32Array[] = [];
+  for (let i = 0; i < numOfChan; i++) {
+    channels.push(audioBuffer.getChannelData(i));
   }
 
-  let offset = 44;
-  for (let i = 0; i < length; i++) {
-    for (let channel = 0; channel < numChannels; channel++) {
-      // Clamp between -1.0 and 1.0
-      let sample = channelData[channel][i];
-      if (sample > 1) sample = 1;
-      if (sample < -1) sample = -1;
-      
-      // Convert Float32 (-1..1) to Int16 (-32768..32767)
-      const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-      view.setInt16(offset, intSample, true);
-      offset += 2;
+  for (let offset = 0; offset < framesToEncode; offset++) {
+    for (let i = 0; i < numOfChan; i++) {
+      let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+      view.setInt16(pos, sample, true);
+      pos += 2;
     }
   }
 
