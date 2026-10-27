@@ -109,10 +109,47 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const audioPlaybackRef = useRef<{ stop: () => void } | null>(null);
 
+  const [isServerOffline, setIsServerOffline] = useState(false);
+  const [serverOfflineMessage, setServerOfflineMessage] = useState('');
+
   useEffect(() => {
     return apiClient.onAuthChange((authed) => {
       setIsAuthenticated(authed);
     });
+  }, []);
+
+  // Server Connection Monitor
+  useEffect(() => {
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
+    const checkConnection = async () => {
+      const res = await apiClient.getSystemInfo();
+      if (!isMounted) return;
+      
+      if (!res.success && res.status === 0) {
+        setIsServerOffline(true);
+        setServerOfflineMessage(res.error || 'Соединение с ESP32 потеряно.');
+      } else {
+        setIsServerOffline(false);
+        if (res.success && res.data) {
+          setSystemStatus(res.data);
+        }
+      }
+      
+      // Schedule the next check ONLY AFTER this one completes
+      // Removed periodic polling based on user request "без механизмов повторных запросов"
+      // if (isMounted) {
+      //   timeoutId = setTimeout(checkConnection, 10000);
+      // }
+    };
+
+    checkConnection();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   // Notification helper
@@ -611,6 +648,30 @@ export default function App() {
           showNotification('success', 'Авторизация успешна', 'Административный доступ подтвержден.');
         }}
       />
+
+      {/* Offline Alert Modal / Pop-up */}
+      {isServerOffline && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-red-900/50 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 border border-red-500/20 shadow-lg shadow-red-500/10">
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">ESP32 Недоступен</h2>
+            <p className="text-slate-400 mb-6 text-sm">
+              Устройство отключено или находится вне зоны действия сети. Пожалуйста, проверьте питание и сетевое подключение.
+            </p>
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 w-full mb-6 text-left">
+              <p className="text-xs text-slate-500 font-mono break-words">{serverOfflineMessage}</p>
+            </div>
+            <button 
+              onClick={() => setIsServerOffline(false)} 
+              className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all active:scale-95 w-full"
+            >
+              Скрыть уведомление
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

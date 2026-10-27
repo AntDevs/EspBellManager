@@ -121,7 +121,13 @@ class EspBellApiClient {
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         if (parsed.target_esp_url) {
-          this.setBaseUrl(parsed.target_esp_url);
+          let url = parsed.target_esp_url;
+          if (url.includes('/proxy')) {
+            url = 'https://bell555.local';
+            parsed.target_esp_url = url;
+            localStorage.setItem('espbell_config', JSON.stringify(parsed));
+          }
+          this.setBaseUrl(url);
         }
       }
     } catch {}
@@ -194,6 +200,7 @@ class EspBellApiClient {
     const startTime = performance.now();
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     const targetBase = this.baseUrl || '';
+    
     const url = `${targetBase}${cleanPath}`;
     
     try {
@@ -354,7 +361,14 @@ class EspBellApiClient {
   // 4. Verify Auth (SHA-256 Challenge Response Login)
   async verifyAuth(hash: string, nonce: string): Promise<ApiResult<{ status: string; token: string; role: string }>> {
     try {
-      const res = await this.request<{ status: string; token: string; role: string }>('POST', '/api/verify-auth', { hash, nonce });
+      // КРИТИЧНО: ESP32 не вычитывает тело запроса (body) при проверке авторизации (security.verify_upload_auth).
+      // Если отправить JSON-тело, ESP32 закроет сокет, оставив непрочитанные байты.
+      // Это вызывает TCP RST (сброс соединения), который браузер Chrome ложно маскирует под CORS error.
+      // Поэтому параметры ОБЯЗАТЕЛЬНО нужно передавать только в заголовках!
+      const res = await this.request<{ status: string; token: string; role: string }>('POST', '/api/verify-auth', undefined, {
+        'X-Auth-Hash': hash,
+        'X-Auth-Nonce': nonce
+      });
       if (res.success && res.data?.token) {
         // Automatically store the session token in apiClient
         this.setAuthToken(res.data.token);
@@ -414,7 +428,9 @@ class EspBellApiClient {
   ): Promise<ApiResult<{ status: string; bytes?: number; message?: string }>> {
     try {
       const startTime = performance.now();
+      
       const targetUrl = `${this.baseUrl}/upload`;
+      
       const token = this.authToken || authHeaders?.token || authHeaders?.hash;
       const hash = authHeaders?.hash || token;
       const nonce = authHeaders?.nonce;
